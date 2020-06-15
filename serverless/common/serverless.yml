@@ -1,0 +1,24 @@
+service: ${self:custom.profile}-common
+
+custom:
+  profile: qctokyo
+  defaultStage: dev
+  environment:
+    dev: ${file(../conf/dev.yml)}
+    prd: ${file(../conf/prd.yml)}
+
+provider:
+  name: aws
+  runtime: python3.7
+  stage: ${opt:stage, self:custom.defaultStage}
+  region: ${self:custom.environment.${self:provider.stage}.region}
+
+layers:
+  qiskit:
+    name: qiskit-${self:provider.stage}
+    path: qiskit-layer
+
+plugins:
+  - serverless-s3-sync
+  - serverless-step-functions
+  - serverless-plugin-tracing

@@ -1,0 +1,11 @@
+{
+  "name": "qctokyo-common",
+  "description": "",
+  "version": "0.1.0",
+  "dependencies": {},
+  "devDependencies": {
+    "serverless-plugin-tracing": "^2.0.0",
+    "serverless-s3-sync": "^1.14.3",
+    "serverless-step-functions": "^2.19.0"
+  }
+}

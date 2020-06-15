@@ -1,0 +1,267 @@
+service: ${self:custom.profile}-apps
+
+custom:
+  profile: qctokyo
+  defaultStage: dev
+  environment:
+    dev: ${file(../conf/dev.yml)}
+    prd: ${file(../conf/prd.yml)}
+  webSiteName: ${self:custom.environment.${self:provider.stage}.webSiteName}
+  s3Sync:
+    - bucketName: ${self:custom.webSiteName}
+      localDir: ../static
+  lambdaRetry:
+    - ErrorEquals:
+        - Lambda.ServiceException
+        - Lambda.AWSLambdaException
+        - Lambda.SdkClientException
+      IntervalSeconds: 1
+      MaxAttempts: 3
+      BackoffRate: 2
+
+provider:
+  name: aws
+  runtime: python3.7
+  stage: ${opt:stage, self:custom.defaultStage}
+  profile: ${self:custom.profile}-${self:provider.stage}
+  region: ${self:custom.environment.${self:provider.stage}.region}
+  memorySize: 512
+  timeout: 60
+  logRetentionInDays: 7
+  tracing: true
+  environment:
+    DYNAMODB_TABLE: horoscope-${self:provider.stage}
+    IBMQ_TOKEN: ${ssm:/${self:custom.profile}/${self:provider.stage}/IBMQ_TOKEN}
+    S3_BUCKET_NAME: ${self:custom.webSiteName}
+    S3_TEMPLATE_KEY: "horoscope_template.html"
+    S3_OUTPUT_KEY: "horoscope.html"
+    SLACK_WEBHOOK_URL: ${ssm:/${self:custom.profile}/${self:provider.stage}/SLACK_WEBHOOK_URL}
+    STAGE: ${self:provider.stage}
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+      Resource:
+        - "Fn::GetAtt": [DynamoDbTable, Arn]
+    - Effect: Allow
+      Action:
+        - s3:GetObject
+        - s3:PutObject
+      Resource:
+        - "Fn::GetAtt": [WebSiteS3Bucket, Arn]
+    - Effect: Allow
+      Action:
+        - states:ListStateMachines
+        - states:StartExecution
+      Resource:
+        - arn:aws:states:${self:provider.region}:${ssm:/account}:stateMachine:*
+    - Effect: Allow
+      Action:
+        - xray:PutTraceSegments
+        - xray:PutTelemetryRecords
+      Resource: "*"
+  layers:
+    - arn:aws:lambda:${self:provider.region}:420165488524:layer:AWSLambda-Python37-SciPy1x:2
+    - ${cf:${self:custom.profile}-common-${self:provider.stage}.QiskitLambdaLayerQualifiedArn}
+
+package:
+  exclude:
+    - node_modules/**
+    - tests/**
+    - __pycache__/**
+
+functions:
+  executeCircuit:
+    handler: qctokyo.horoscope.execute_circuit
+    layers: ${self:provider.layers}
+  getJobStatus:
+    handler: qctokyo.horoscope.get_job_status
+    layers: ${self:provider.layers}
+  storeResult:
+    handler: qctokyo.horoscope.store_result
+    layers: ${self:provider.layers}
+  invokeUpdateHoroscope:
+    handler: qctokyo.horoscope.invoke_update_horoscope
+  updatePage:
+    handler: qctokyo.page_updater.update_page
+  notifyHoroscopeSuccessToSlack:
+    handler: qctokyo.notificator.notify_horoscope_success_to_slack
+  notifyHoroscopeFailedToSlack:
+    handler: qctokyo.notificator.notify_horoscope_failed_to_slack
+  notifyHoroscopeUpdateToSlack:
+    handler: qctokyo.notificator.notify_horoscope_update_to_slack
+  notifyHoroscopeUpdateFailedToSlack:
+    handler: qctokyo.notificator.notify_horoscope_update_failed_to_slack
+
+stepFunctions:
+  stateMachines:
+    RunHoroscope:
+      name: RunHoroscope-${self:provider.stage}
+      events:
+        - schedule:
+            rate: cron(0 0 * * ? *)
+            enabled: ${self:custom.environment.${self:provider.stage}.schedule.enabled}
+      notifications:
+        ABORTED:
+          - lambda:
+              Fn::GetAtt: [NotifyHoroscopeFailedToSlackLambdaFunction, Arn]
+        FAILED:
+          - lambda:
+              Fn::GetAtt: [NotifyHoroscopeFailedToSlackLambdaFunction, Arn]
+        TIMED_OUT:
+          - lambda:
+              Fn::GetAtt: [NotifyHoroscopeFailedToSlackLambdaFunction, Arn]
+      definition:
+        StartAt: "ExecuteCircuit"
+        States:
+          ExecuteCircuit:
+            Type: Task
+            Resource:
+              Fn::GetAtt: [ExecuteCircuitLambdaFunction, Arn]
+            Retry: ${self:custom.lambdaRetry}
+            Next: Wait
+          Wait:
+            Type: Wait
+            Seconds: 60
+            Next: GetJobStatus
+          GetJobStatus:
+            Type: Task
+            Resource:
+              Fn::GetAtt: [GetJobStatusLambdaFunction, Arn]
+            Retry: ${self:custom.lambdaRetry}
+            Next: CheckJobStatus
+          CheckJobStatus:
+            Type: Choice
+            Choices:
+            - Variable: "$.job_status"
+              StringEquals: "DONE"
+              Next: StoreResult
+            - Variable: "$.job_status"
+              StringEquals: "CANCELLED"
+              Next: JobCancelled
+            - Variable: "$.job_status"
+              StringEquals: "ERROR"
+              Next: JobError
+            Default: Wait
+          JobCancelled:
+            Type: Fail
+            Cause: "Job CANCELLED"
+          JobError:
+            Type: Fail
+            Cause: "Job ERROR"
+          StoreResult:
+            Type: Task
+            Resource:
+              Fn::GetAtt: [StoreResultLambdaFunction, Arn]
+            Retry: ${self:custom.lambdaRetry}
+            Next: NotifyHoroscopeSuccessToSlack
+          NotifyHoroscopeSuccessToSlack:
+            Type: Task
+            Resource:
+              Fn::GetAtt: [NotifyHoroscopeSuccessToSlackLambdaFunction, Arn]
+            Retry: ${self:custom.lambdaRetry}
+            Next: InvokeUpdateHoroscope
+          InvokeUpdateHoroscope:
+            Type: Task
+            Resource:
+              Fn::GetAtt: [InvokeUpdateHoroscopeLambdaFunction, Arn]
+            Retry: ${self:custom.lambdaRetry}
+            End: true
+    UpdateHoroscope:
+      name: UpdateHoroscope-${self:provider.stage}
+      events:
+        - schedule:
+            rate: cron(15 0 * * ? *)
+            enabled: false # disabled
+      notifications:
+        ABORTED:
+          - lambda:
+              Fn::GetAtt: [NotifyHoroscopeUpdateFailedToSlackLambdaFunction, Arn]
+        FAILED:
+          - lambda:
+              Fn::GetAtt: [NotifyHoroscopeUpdateFailedToSlackLambdaFunction, Arn]
+        TIMED_OUT:
+          - lambda:
+              Fn::GetAtt: [NotifyHoroscopeUpdateFailedToSlackLambdaFunction, Arn]
+      definition:
+        StartAt: "UpdatePage"
+        States:
+          UpdatePage:
+            Type: Task
+            Resource:
+              Fn::GetAtt: [UpdatePageLambdaFunction, Arn]
+            Retry: ${self:custom.lambdaRetry}
+            Next: NotifyHoroscopeUpdateToSlack
+          NotifyHoroscopeUpdateToSlack:
+            Type: Task
+            Resource:
+              Fn::GetAtt: [NotifyHoroscopeUpdateToSlackLambdaFunction, Arn]
+            Retry: ${self:custom.lambdaRetry}
+            End: true
+
+resources:
+  Resources:
+    DynamoDbTable:
+      Type: 'AWS::DynamoDB::Table'
+      DeletionPolicy: Retain
+      Properties:
+        TableName: ${self:provider.environment.DYNAMODB_TABLE}
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        # on demand mode
+        BillingMode: PAY_PER_REQUEST
+
+    LogS3Bucket:
+      Type: AWS::S3::Bucket
+      DeletionPolicy: Retain
+      Properties:
+        BucketName: ${self:custom.profile}-${self:provider.stage}-log
+        AccessControl: LogDeliveryWrite
+
+    WebSiteS3Bucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:custom.webSiteName}
+        AccessControl: PublicRead
+        WebsiteConfiguration:
+          IndexDocument: index.html
+          ErrorDocument: error.html
+        LoggingConfiguration:
+          DestinationBucketName:
+            Ref: LogS3Bucket
+          LogFilePrefix: s3log/${self:custom.webSiteName}/
+    WebSiteS3BucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket:
+          Ref: WebSiteS3Bucket
+        PolicyDocument:
+          Statement:
+            - Sid: IamRoleLambdaPutObject
+              Effect: Allow
+              Principal:
+                AWS: 
+                  Fn::GetAtt: [IamRoleLambdaExecution, Arn]
+              Action:
+               - s3:PutObject
+              Resource: arn:aws:s3:::${self:custom.webSiteName}/*
+            - Sid: PublicGetObject
+              Effect: Allow
+              Principal: "*"
+              Action:
+               - s3:GetObject
+              Resource: arn:aws:s3:::${self:custom.webSiteName}/*
+
+plugins:
+  - serverless-s3-sync
+  - serverless-step-functions
+  - serverless-plugin-tracing

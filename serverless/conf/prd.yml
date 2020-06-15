@@ -1,0 +1,4 @@
+webSiteName: www.quantumcomputer.tokyo
+region: us-west-2
+schedule:
+  enabled: true

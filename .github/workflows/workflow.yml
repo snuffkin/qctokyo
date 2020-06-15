@@ -1,0 +1,135 @@
+# This workflow will install Python dependencies, run tests, upload test results and upload coverage with a single version of Python
+# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
+
+name: test
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  # If commit message contains '[ci skip]' or '[skip ci]', skip the workflow execution.
+  check_ci_skip:
+    runs-on: ubuntu-latest
+    if: ${{ !contains(github.event.head_commit.message, '[ci skip]') && !contains(github.event.head_commit.message, '[skip ci]') }}
+    steps:
+      - run: echo "${{ github.event.head_commit.message }}"
+
+  ci:
+    runs-on: ubuntu-latest
+    needs: check_ci_skip
+    env:
+      PIPENV_VENV_IN_PROJECT: true
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Python 3.7
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.7
+
+    - name: Cache dependencies
+      id: cache
+      uses: actions/cache@v2
+      env:
+        cache-name: cache-dependencies
+      with:
+        path: .venv
+        key: dependencies-${{ runner.os }}-${{ hashFiles('Pipfile') }}
+
+    - name: Install pipenv
+      run: |
+        pip install pipenv
+
+    - name: Install dependencies
+      if: steps.cache.outputs.cache-hit != 'true'
+      run: |
+        pipenv install --dev
+
+    - name: Test with pytest
+      run: |
+        pipenv run pytest --junit-xml=test-results/results.xml --cov=serverless/apps/qctokyo --cov-report=xml:test-results/coverage.xml --cov-report=html:test-results/coverage
+        pipenv run python -m junit2htmlreport test-results/results.xml test-results/results.html
+
+    - name: Upload pytest test results
+      uses: actions/upload-artifact@v2
+      # Use always() to always run this step to publish test results when there are test failures
+      if: always()
+      with:
+        name: pytest-results
+        path: test-results
+
+    - name: Upload coverage
+      uses: codecov/codecov-action@v1
+      # Use always() to always run this step to publish test results when there are test failures
+      if: always()
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }} # not required for public repos
+        file: test-results/coverage.xml
+
+    - name: Set COMMIT_MESSAGE
+      # Use always() to always run this step to publish test results when there are test failures
+      if: always()
+      run: echo ::set-env name=COMMIT_MESSAGE::$(echo "${{ github.event.head_commit.message }}" | tr '\n' ' ')
+
+    - name: Slack notification on success
+      if: success()
+      uses: tokorom/action-slack-incoming-webhook@master
+      env:
+        INCOMING_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      with:
+        text: "CI is success:smile:"
+        attachments: |
+          [
+            {
+              "color": "good",
+              "author_name": "${{ github.actor }}",
+              "author_icon": "${{ github.event.sender.avatar_url }}",
+              "fields": [
+                {
+                  "title": "Commit Message",
+                  "value": "${{ env.COMMIT_MESSAGE }}"
+                },
+                {
+                  "title": "GitHub Actions URL",
+                  "value": "${{ github.event.repository.html_url }}/actions/runs/${{ github.run_id }}"
+                },
+                {
+                  "title": "Compare URL",
+                  "value": "${{ github.event.compare }}"
+                }
+              ]
+            }
+          ]
+
+    - name: Slack notification on failure
+      if: failure()
+      uses: tokorom/action-slack-incoming-webhook@master
+      env:
+        INCOMING_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      with:
+        text: "CI is failure:rage:"
+        attachments: |
+          [
+            {
+              "color": "danger",
+              "author_name": "${{ github.actor }}",
+              "author_icon": "${{ github.event.sender.avatar_url }}",
+              "fields": [
+                {
+                  "title": "Commit Message",
+                  "value": "${{ env.COMMIT_MESSAGE }}"
+                },
+                {
+                  "title": "GitHub Actions URL",
+                  "value": "${{ github.event.repository.html_url }}/actions/runs/${{ github.run_id }}"
+                },
+                {
+                  "title": "Compare URL",
+                  "value": "${{ github.event.compare }}"
+                }
+              ]
+            }
+          ]
