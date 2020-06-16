@@ -108,3 +108,6 @@ package-lock.json
 
 # mypy
 .mypy_cache/
+
+# AWS Lambda layers
+qiskit-layer/
