@@ -36,15 +36,15 @@ def test_execute_circuit(caplog):
     actual = horoscope.execute_circuit(None, None)
 
     # validate return value
-    assert actual["backend_name"] == "ibmq_ourense"
+    assert actual["backend_name"] == "ibmq_athens"
     assert actual["job_id"] != None
 
     # validate logger
-    assert caplog.record_tuples[1] == ("root", INFO, "use backend=ibmq_ourense")
+    assert caplog.record_tuples[1] == ("root", INFO, "use backend=ibmq_athens")
     assert caplog.record_tuples[-1][0] == "root"
     assert caplog.record_tuples[-1][1] == INFO
     assert caplog.record_tuples[-1][2].startswith(
-        "response={'backend_name': 'ibmq_ourense', 'job_id'"
+        "response={'backend_name': 'ibmq_athens', 'job_id'"
     )
 
 
@@ -57,7 +57,7 @@ def test_execute_circuit_backend_not_found(mocker, caplog):
 
     # validate exceeption
     assert excinfo.value.args == (
-        "active backend is not found in ['ibmq_ourense', 'ibmq_vigo', 'ibmq_london', 'ibmq_burlington', 'ibmq_essex', 'ibmq_rome', 'ibmqx2', 'ibmq_16_melbourne']. can not execute circuit.",
+        "active backend is not found in ['ibmq_athens', 'ibmq_santiago', 'ibmq_belem', 'ibmq_quito', 'ibmq_lima']. can not execute circuit.",
     )
 
     # validate logger
@@ -65,7 +65,7 @@ def test_execute_circuit_backend_not_found(mocker, caplog):
     assert caplog.record_tuples[1] == (
         "root",
         ERROR,
-        "active backend is not found in ['ibmq_ourense', 'ibmq_vigo', 'ibmq_london', 'ibmq_burlington', 'ibmq_essex', 'ibmq_rome', 'ibmqx2', 'ibmq_16_melbourne']. can not execute circuit.",
+        "active backend is not found in ['ibmq_athens', 'ibmq_santiago', 'ibmq_belem', 'ibmq_quito', 'ibmq_lima']. can not execute circuit.",
     )
 
 
