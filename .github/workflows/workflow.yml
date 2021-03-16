@@ -10,16 +10,8 @@ on:
     branches: [ master ]
 
 jobs:
-  # If commit message contains '[ci skip]' or '[skip ci]', skip the workflow execution.
-  check_ci_skip:
-    runs-on: ubuntu-latest
-    if: ${{ !contains(github.event.head_commit.message, '[ci skip]') && !contains(github.event.head_commit.message, '[skip ci]') }}
-    steps:
-      - run: echo "${{ github.event.head_commit.message }}"
-
   ci:
     runs-on: ubuntu-latest
-    needs: check_ci_skip
     env:
       PIPENV_VENV_IN_PROJECT: true
     steps:
