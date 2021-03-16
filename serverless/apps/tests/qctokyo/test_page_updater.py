@@ -28,7 +28,11 @@ def test_update_page():
     # setup S3
     s3 = boto3.resource("s3")
     bucket = s3.Bucket(os.environ["S3_BUCKET_NAME"])
-    bucket.create(CreateBucketConfiguration={"LocationConstraint": "us-west-2"})
+    bucket.create(
+        CreateBucketConfiguration={
+            "LocationConstraint": os.environ["AWS_DEFAULT_REGION"]
+        }
+    )
 
     with open(
         os.path.join(
