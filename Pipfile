@@ -7,7 +7,7 @@ verify_ssl = true
 allow_prereleases = true
 
 [packages]
-boto3 = "*"
+boto3 = "==1.14.2"
 qiskit = "==0.19.3"
 numpy = "==1.18.5"
 
