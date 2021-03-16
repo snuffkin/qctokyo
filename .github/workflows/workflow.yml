@@ -69,6 +69,11 @@ jobs:
         token: ${{ secrets.CODECOV_TOKEN }} # not required for public repos
         file: test-results/coverage.xml
 
+    - name: Set COMMIT_MESSAGE
+      # Use always() to always run this step to publish test results when there are test failures
+      if: always()
+      run: echo ::set-env name=COMMIT_MESSAGE::$(echo "${{ github.event.head_commit.message }}" | tr '\n' ' ')
+
     - name: Slack notification on success
       if: success()
       uses: tokorom/action-slack-incoming-webhook@master
