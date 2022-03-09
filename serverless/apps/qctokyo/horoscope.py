@@ -10,10 +10,11 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 backend_candidates = [
-    "ibmq_athens",
+    "ibmq_manila",
+    "ibmq_bogota",
     "ibmq_santiago",
-    "ibmq_belem",
     "ibmq_quito",
+    "ibmq_belem",
     "ibmq_lima",
 ]
 
