@@ -8,7 +8,7 @@ allow_prereleases = true
 
 [packages]
 boto3 = "==1.14.2"
-qiskit = "==0.19.3"
+qiskit = "==0.34.2"
 numpy = "==1.18.5"
 
 [dev-packages]
@@ -26,4 +26,3 @@ requests-mock = "*"
 
 [requires]
 python_version = "3.7"
-
