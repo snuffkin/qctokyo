@@ -10,12 +10,12 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 backend_candidates = [
-    "ibmq_manila",
     "ibmq_bogota",
-    "ibmq_santiago",
     "ibmq_quito",
     "ibmq_belem",
     "ibmq_lima",
+    "ibmq_manila",
+    "ibmq_santiago",
 ]
 
 
@@ -97,7 +97,8 @@ def store_result(event: dict, context) -> dict:
     result["id"] = "latest"
     result["backend_name"] = event["backend_name"]
     result["job_id"] = event["job_id"]
-    result["creation_date"] = job.creation_date()
+    result["creation_date"] = job.creation_date().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    # result["creation_date"] = job.creation_date()
 
     # store the execution result to DynamoDB
     dynamodb = boto3.resource("dynamodb")
@@ -106,8 +107,9 @@ def store_result(event: dict, context) -> dict:
     # store latest record
     table.put_item(Item=result)
     # store history record
-    dt = datetime.datetime.strptime(result["creation_date"], "%Y-%m-%dT%H:%M:%S.%fZ")
-    result["id"] = dt.strftime("%Y%m%d-%H%M%S")  # UTC
+    # dt = datetime.datetime.strptime(result["creation_date"], "%Y-%m-%dT%H:%M:%S.%fZ")
+    # result["id"] = dt.strftime("%Y%m%d-%H%M%S")  # UTC
+    result["id"] = job.creation_date().strftime("%Y%m%d-%H%M%S")  # UTC
     table.put_item(Item=result)
 
     logger.info(f"result={result}")

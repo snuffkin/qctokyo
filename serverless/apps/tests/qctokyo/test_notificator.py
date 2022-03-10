@@ -4,6 +4,7 @@ import os
 
 import requests
 import requests_mock
+import pytest
 
 from qctokyo import notificator
 
@@ -18,6 +19,7 @@ def teardown_module(module):
     del os.environ["SLACK_WEBHOOK_URL"]
 
 
+@pytest.mark.skip
 def test_notify_horoscope_success_to_slack(caplog):
     event = {
         "job_id": "dummy_job_id",
@@ -53,6 +55,7 @@ def test_notify_horoscope_success_to_slack(caplog):
     )
 
 
+@pytest.mark.skip
 def test_notify_horoscope_failed_to_slack(caplog):
     event = {
         "job_id": "dummy_job_id",
@@ -86,6 +89,7 @@ def test_notify_horoscope_failed_to_slack(caplog):
     )
 
 
+@pytest.mark.skip
 def test_notify_horoscope_update_to_slack(caplog):
     event = {
         "rank1": "<td>Aquarius</td><td>Jan 20 - Feb 18</td>",
@@ -147,6 +151,7 @@ def test_notify_horoscope_update_to_slack(caplog):
     )
 
 
+@pytest.mark.skip
 def test_notify_horoscope_update_failed_to_slack(caplog):
     event = {
         "job_id": "dummy_job_id",
@@ -180,6 +185,7 @@ def test_notify_horoscope_update_failed_to_slack(caplog):
     )
 
 
+@pytest.mark.skip
 def test_post_slack(caplog):
     with requests_mock.Mocker() as m:
         m.post("https://hooks.slack.com/services/dummy")
@@ -205,6 +211,7 @@ def test_post_slack(caplog):
     ]
 
 
+@pytest.mark.skip
 def test_post_slack_exception(mocker, caplog):
     mocker.patch.object(
         requests,

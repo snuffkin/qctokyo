@@ -21,7 +21,7 @@ custom:
 
 provider:
   name: aws
-  runtime: python3.7
+  runtime: python3.8
   stage: ${opt:stage, self:custom.defaultStage}
   profile: ${self:custom.profile}-${self:provider.stage}
   region: ${self:custom.environment.${self:provider.stage}.region}
@@ -29,13 +29,18 @@ provider:
   timeout: 60
   logRetentionInDays: 7
   tracing: true
+  ecr:
+    images:
+      container-qiskit:
+        path: .
+        file: ./container-qiskit/Dockerfile
   environment:
     DYNAMODB_TABLE: horoscope-${self:provider.stage}
-    IBMQ_TOKEN: ${ssm:/${self:custom.profile}/${self:provider.stage}/IBMQ_TOKEN}
+    IBMQ_TOKEN: "write your value"
     S3_BUCKET_NAME: ${self:custom.webSiteName}
     S3_TEMPLATE_KEY: "horoscope_template.html"
     S3_OUTPUT_KEY: "horoscope.html"
-    SLACK_WEBHOOK_URL: ${ssm:/${self:custom.profile}/${self:provider.stage}/SLACK_WEBHOOK_URL}
+    SLACK_WEBHOOK_URL: "write your value"
     STAGE: ${self:provider.stage}
   iamRoleStatements:
     - Effect: Allow
@@ -59,15 +64,12 @@ provider:
         - states:ListStateMachines
         - states:StartExecution
       Resource:
-        - arn:aws:states:${self:provider.region}:${ssm:/account}:stateMachine:*
+        - arn:aws:states:${self:provider.region}:${aws:accountId}:stateMachine:*
     - Effect: Allow
       Action:
         - xray:PutTraceSegments
         - xray:PutTelemetryRecords
       Resource: "*"
-  layers:
-    - arn:aws:lambda:${self:provider.region}:420165488524:layer:AWSLambda-Python37-SciPy1x:2
-    - ${cf:${self:custom.profile}-common-${self:provider.stage}.QiskitLambdaLayerQualifiedArn}
 
 package:
   exclude:
@@ -77,16 +79,25 @@ package:
 
 functions:
   executeCircuit:
-    handler: qctokyo.horoscope.execute_circuit
-    layers: ${self:provider.layers}
+    image:
+      name: container-qiskit
+      command:
+        - qctokyo.horoscope.execute_circuit
   getJobStatus:
-    handler: qctokyo.horoscope.get_job_status
-    layers: ${self:provider.layers}
+    image:
+      name: container-qiskit
+      command:
+        - qctokyo.horoscope.get_job_status
   storeResult:
-    handler: qctokyo.horoscope.store_result
-    layers: ${self:provider.layers}
+    image:
+      name: container-qiskit
+      command:
+        - qctokyo.horoscope.store_result
   invokeUpdateHoroscope:
-    handler: qctokyo.horoscope.invoke_update_horoscope
+    image:
+      name: container-qiskit
+      command:
+        - qctokyo.horoscope.invoke_update_horoscope
   updatePage:
     handler: qctokyo.page_updater.update_page
   notifyHoroscopeSuccessToSlack:
@@ -235,10 +246,10 @@ resources:
         WebsiteConfiguration:
           IndexDocument: index.html
           ErrorDocument: error.html
-        LoggingConfiguration:
-          DestinationBucketName:
-            Ref: LogS3Bucket
-          LogFilePrefix: s3log/${self:custom.webSiteName}/
+        #LoggingConfiguration:
+        #  DestinationBucketName:
+        #    Ref: LogS3Bucket
+        #  LogFilePrefix: s3log/${self:custom.webSiteName}/
     WebSiteS3BucketPolicy:
       Type: AWS::S3::BucketPolicy
       Properties:

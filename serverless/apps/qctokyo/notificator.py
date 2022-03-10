@@ -1,7 +1,7 @@
 import json
 import logging
 import os
-import requests
+import urllib.request
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -77,10 +77,11 @@ def _post_slack(title: str, color: str, detail: str) -> None:
         ]
     }
 
-    try:
-        slack_webhook_url = "https://" + os.environ["SLACK_WEBHOOK_URL"]
-        response = requests.post(slack_webhook_url, data=json.dumps(payload))
-    except requests.exceptions.RequestException:
-        logger.exception(f"failed to call slack_webhook")
-    else:
-        logger.info(f"slack_webhook_response status_code={response.status_code}")
+    url = "https://" + os.environ["SLACK_WEBHOOK_URL"]
+    data = json.dumps(payload).encode()
+    headers = {
+        "Content-Type": "application/json",
+    }
+    request = urllib.request.Request(url=url, data=data, headers=headers, method="POST")
+    with urllib.request.urlopen(request) as response:
+        logger.info(f"slack_webhook_response status_code={response.getcode()}")
